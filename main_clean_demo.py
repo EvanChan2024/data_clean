@@ -8,7 +8,7 @@ import time
 main_clean的演示版，无自动重连
 增加双线程运行
 '''
-value = 50
+value = 2
 # MQTT 服务器信息
 broker_address = "221.226.48.78"
 port = 1885
