@@ -15,43 +15,46 @@ import schedule
 mqtt_lock = threading.Lock()
 
 
-# interval_in_seconds = 3600
-# schedule.every(interval_in_seconds).seconds.do(read_data)
-#
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
+def job2(string, sensor):
+    def read_data(statement):
+        conn: taos.TaosConnection = taos.connect(host="dbmaster",
+                                                 user="root",
+                                                 password="taosdata",
+                                                 database="db_jkjc",
+                                                 port=6030)
+        result1 = conn.query(statement)
+        result_list = result1.fetch_all()  # 将查询结果转换为列表
+        # print(result_list)
+        thre = threshold_cal(result_list)
+        return thre
+
+    def threshold_cal(data):
+        threshold = 2 * np.percentile(np.abs(data), 99.5)  # 先将data转为numpy数组
+        return threshold
+
+    def job3():
+        result2 = read_data(string)
+        print(sensor + '动态阈值:', result2)
+
+    # job3()
+    # 定时任务
+    interval_in_seconds = 10
+    schedule.every(interval_in_seconds).seconds.do(job3)  # 循环体放在这会导致单个线程中的多次循环打印相同值
+    # event.set()  # 设置事件
 
 
-def read_data(statement):
-    conn: taos.TaosConnection = taos.connect(host="jkjc1",
-                                             user="root",
-                                             password="taosdata",
-                                             database="db_jkjc",
-                                             port=6030)
-    result = conn.query(statement)
-    result_list = result.fetch_all()  # 将查询结果转换为列表
-    thre = threshold_cal(result_list)
-    return thre
-
-
-def threshold_cal(data):
-    threshold = 2 * np.percentile(np.abs(data), 99.5)  # 先将data转为numpy数组
-    return threshold
-
-
-def job(topic, topic_new, mqtt_client_id, thre):
+def job(topic, topic_new, mqtt_client_id, result):
     # MQTT 消息到来时的回调函数
     def on_message(client, userdata, message):
         # 接收到消息时的处理逻辑
         payload = message.payload
-        unpack(payload)
+        unpack(payload, result)
 
-    def unpack(payload):
+    def unpack(payload, result):
         # 解析二进制数据
         data = struct.unpack(">HBBBBB" + "f" * int(((len(payload))-7)/4), payload)  # 解析后的二进制数据
         payload_len = int(((len(payload))-7)/4)
-        pack(data, payload_len, thre)
+        pack(data, payload_len, result)
 
     def pack(data, payload_len, threshold):
         year = data[0]
@@ -64,7 +67,7 @@ def job(topic, topic_new, mqtt_client_id, thre):
         processed_data = process_data(data_num, threshold)
         cleaned_data = struct.pack(">HBBBBB" + "f" * len(processed_data), year, month, day, hour, minute, second, *processed_data)
         mqtt_publish(client, topic_new, cleaned_data)
-        # print(processed_data)
+        print(data_num)
 
     def process_data(data, value):
         # 统计超过参考值的索引
@@ -127,23 +130,31 @@ def job(topic, topic_new, mqtt_client_id, thre):
 
 
 if __name__ == "__main__":
-    sensor = ['XSH-DIS-G02-001-01', 'XSH-DIS-G02-001-02']
+    sensor = ['XSH-DIS-G02-001-01', 'XSH-DIS-G02-001-02', 'XSH-DIS-G02-001-03']
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + "G204320707L0160/" + sensor[i]
         topic_new = "cleandata/" + "G204320707L0160/" + sensor[i]
         mqtt_client_id = "test_G204320707L0160_" + sensor[i]
-        string = 'select val from ' + '`' + sensor[i] + '`' + ' limit 1800'
-        thre = read_data(string)  # 怎么把语句传过去？
+        # string = 'select val from ' + '`' + sensor[i] + '`' + ' limit 18'
+        string = 'select val from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit 18'
         print(string)
 
+        # event = threading.Event()
         # 创建线程
-        thread = threading.Thread(target=job, args=(topic, topic_new, mqtt_client_id, thre))
-        threads.append(thread)  # 将线程对象添加到列表中
-        thread.start()  # 启动线程
+        thread2 = threading.Thread(target=job2, args=(string, sensor[i]))
+        # thread1 = threading.Thread(target=job, args=(topic, topic_new, mqtt_client_id, result))
+        # threads.append(thread1)  # 将线程对象添加到列表中
+        # thread1.start()
+        threads.append(thread2)  # 将线程对象添加到列表中
+        thread2.start()  # 启动线程
 
     # 等待所有线程创建完成
-    for thread in threads:
-        thread.join()
-
+    # for thread1 in threads:
+    #     thread1.join()
+    for thread2 in threads:  # 循环体放在这不会导致单个线程中的多次循环打印相同值
+        thread2.join()
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
 
