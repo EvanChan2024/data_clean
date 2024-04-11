@@ -29,7 +29,9 @@ def job2(string, sensorcode, thread_index, cycle):
         return thre
 
     def threshold_cal(data):
-        threshold = 2 * np.percentile(np.abs(data), 50)  # 先将data转为numpy数组
+        q75 = np.percentile(data, 95) + (np.percentile(data, 95) - np.percentile(data, 5)) * 10  # 先将data转为numpy数组
+        q25 = np.percentile(data, 5) - (np.percentile(data, 95) - np.percentile(data, 5)) * 10
+        threshold = np.max(np.abs(q75), np.abs(q25))
         return threshold
 
     def job3():
@@ -49,8 +51,10 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
     # MQTT 消息到来时的回调函数
     def on_message(client, userdata, message):
         # 接收到消息时的处理逻辑
+        # topic2 = message.topic
         payload = message.payload
         unpack(payload)
+        # print(topic2)
 
     def unpack(payload):
         # 解析二进制数据
@@ -134,21 +138,22 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
 
 
 if __name__ == "__main__":
-    sensor = ['XSH-DIS-G02-001-01', 'XSH-DIS-G02-001-02', 'XSH-DIS-G02-001-03']
-    timecycle = [10, 11, 12]
+    sensor = ['XSH-DIS-G02-001-01', 'XSH-DIS-G02-001-02', 'XSH-DIS-G02-001-03', 'XSH-DIS-G02-002-04', 'XSH-DIS-G02-002-05', 'XSH-DIS-G02-002-06', 'XSH-RSG-G02-001-01', 'XSH-RSG-G02-001-02', 'XSH-RSG-G02-001-03']
+    timecycle = [3600*24, 3600*24, 3600*24, 3600*24, 3600*24, 3600*24, 3600*24, 3600*24, 3600*24]
+    point = [5*3600*24, 5*3600*24, 5*3600*24, 5*3600*24, 5*3600*24, 5*3600*24, 144, 144, 144]
     # 共享变量，用于传递数值
     shared_value = [50] * len(sensor)
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + "G204320707L0160/" + sensor[i]
-        topic_new = "cleandata/" + "G204320707L0160/" + sensor[i]
-        mqtt_client_id = "test_G204320707L0160_" + sensor[i]
-        str = 'select val from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit 18'
-        print(str)
-
+        topic_new = "clean2data/" + "G204320707L0160/" + sensor[i]
+        # print(topic_new)
+        mqtt_client_id = "test2_G204320707L0160_" + sensor[i]
+        string = 'select val from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
+        # print(string)
         # event = threading.Event()
         # 创建线程
-        thread2 = threading.Thread(target=job2, args=(str, sensor[i], i, timecycle[i]))
+        thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
         thread1 = threading.Thread(target=job, args=(topic, topic_new, mqtt_client_id, i))
         threads.append(thread2)  # 将线程对象添加到列表中
         thread2.start()  # 启动线程，注意thread1与thread2的顺序
