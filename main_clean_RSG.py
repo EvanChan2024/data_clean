@@ -18,7 +18,7 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 创建一个文件处理器来将日志写入到文件
-file_handler = logging.FileHandler('app.log')
+file_handler = logging.FileHandler('app2.log')
 file_handler.setLevel(logging.INFO)
 
 # 定义日志消息的格式
@@ -51,10 +51,18 @@ def job2(string, sensorcode, thread_index, cycle):
 
     def threshold_cal(data):
         try:
-            q75 = np.percentile(data, 95) + (np.percentile(data, 95) - np.percentile(data, 5)) * 10  # 先将data转为numpy数组
-            q25 = np.percentile(data, 5) - (np.percentile(data, 95) - np.percentile(data, 5)) * 10
-            threshold = max(np.abs(q75), np.abs(q25))
-            return threshold
+            # 将二维列表转换为 numpy 数组
+            data_array = np.array(data)
+            thresholds = []
+            for col_data in data_array.T:  # 对数组的转置进行迭代，以便按列访问数据
+                q25 = np.percentile(col_data, 5)
+                q75 = np.percentile(col_data, 95)
+                iqr = (q75 - q25) * 10
+                q1 = q25 - iqr
+                q2 = q75 + iqr
+                threshold = max(np.abs(q1), np.abs(q2))
+                thresholds.append(threshold)
+            return thresholds
         except Exception as e:
             logger.error(f"Threshold calculating failed: {e}, data: {data}")
 
@@ -73,7 +81,8 @@ def job2(string, sensorcode, thread_index, cycle):
     def job3():
         global shared_value
         result2 = read_data(string)
-        shared_value[thread_index] = result2
+        for i in range(3):
+            shared_value[3*(thread_index-1)+i] = result2[i]  # 3=len(data_num)
 
     # 定时任务
     try:
@@ -123,7 +132,10 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
             second = data[5]
             global shared_value
             data_num = np.array(data[6:payload_len + 6], dtype=np.float64)  # 提取所需的数据部分并转换为 NumPy 数组
-            processed_data = process_data(data_num, shared_value[thread_index])
+            processed_data =[]
+            for i in range(len(data_num)):
+                processed = process_data(data_num[i], shared_value[3*(thread_index-1)+i])  # 3=len(data_num)
+                processed_data.append(processed)
             cleaned_data = struct.pack(">HBBBBB" + "f" * len(processed_data), year, month, day, hour, minute, second,
                                        *processed_data)
             thread_current = check_current_thread()
@@ -143,7 +155,7 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
             exceed_indices = np.where(np.abs(data) > value)[0]
             # 遍历超过参考值的索引
             for idx in exceed_indices:
-                data[idx] = value * np.random.uniform(0.1, 0.5)
+                data[idx] = value * np.random.uniform(0.1, 0.2)
             return data
         except Exception as e:
             logger.error(f"Data filter failed: {e}, data: {data}, value: {value}")
@@ -164,7 +176,7 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
             thread_current = check_current_thread()
             logger.info(f"{thread_current}: Unexpected disconnection. Will try to reconnect... ({rc})")
             try:
-                time.sleep(10)  # 设置重连尝试的间隔，例如等待10秒
+                time.sleep(180)  # 设置重连尝试的间隔，例如等待10秒
                 client.reconnect()
                 rc = 0  # 如果成功重连，将 rc 设为 0 以退出循环
                 thread_current = check_current_thread()
@@ -213,24 +225,25 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
 
 
 if __name__ == "__main__":
-    sensor = ['KGD-DIS-G02-001-01', 'KGD-DIS-G02-001-02', 'KGD-DIS-G02-001-03', 'KGD-DIS-G02-002-04', 'KGD-DIS-G02-002-05', 'KGD-DIS-G02-002-06',
-              'MZQ-DIS-G02-001-01', 'MZQ-DIS-G02-001-02', 'MZQ-DIS-G02-001-03', 'MZQ-DIS-G02-001-04', 'MZQ-DIS-G02-001-05', 'MZQ-DIS-G02-001-06',
-              'XZH-DIS-G02-001-01', 'XZH-DIS-G02-001-02', 'XZH-DIS-G02-001-03', 'XZH-DIS-G02-002-04', 'XZH-DIS-G02-002-05', 'XZH-DIS-G02-002-06']
-    bridge_single = ['S245320707L0010', 'S267320722L0090', 'G204320707L0010']
-    sensor_count = [6, 6, 6]
+    sensor = ['XSH-RSG-G02-001-01', 'XSH-RSG-G02-001-02', 'XSH-RSG-G02-001-03', 'XSH-RSG-G02-001-04', 'XSH-RSG-G02-002-05', 'XSH-RSG-G02-002-06', 'XSH-RSG-G02-002-07', 'XSH-RSG-G02-002-08',
+              'LLH-RSG-G02-001-01', 'LLH-RSG-G02-001-02',
+              'KGD-RSG-G02-001-01', 'KGD-RSG-G02-001-02']
+    bridge_single = ['G204320707L0160', 'G204320706L0020', 'S245320707L0010']
+    sensor_count = [8, 2, 2]
     bridge = []
     for i in range(len(bridge_single)):
         bridge.extend([bridge_single[i]] * sensor_count[i])
-    timecycle = [3600*24] * len(sensor)
-    point = [5*3600*24] * len(sensor)
+    timecycle = [60] * len(sensor)
+    point = [144] * len(sensor)
+    col = 3  # 一个包中的数据个数
     # 共享变量，用于传递数值
-    shared_value = [50] * len(sensor)
+    shared_value = [300] * len(sensor) * col
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]
         topic_new = "cleandata/" + bridge[i] + "/" + sensor[i]
         mqtt_client_id = "test_" + bridge[i] + "_" + sensor[i]
-        string = 'select val from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
+        string = 'select val1,val2,val3 from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
         # 创建线程
         thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
         thread1 = threading.Thread(target=job, args=(topic, topic_new, mqtt_client_id, i))
