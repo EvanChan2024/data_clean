@@ -6,8 +6,9 @@ import time
 import taos
 import schedule
 import logging
+import pandas as pd
 '''
-ver2.2
+ver3.1
 '''
 
 # 锁
@@ -225,15 +226,11 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
 
 
 if __name__ == "__main__":
-    sensor = ['XSH-RSG-G02-001-01', 'XSH-RSG-G02-001-02', 'XSH-RSG-G02-001-03', 'XSH-RSG-G02-001-04', 'XSH-RSG-G02-002-05', 'XSH-RSG-G02-002-06', 'XSH-RSG-G02-002-07', 'XSH-RSG-G02-002-08',
-              'LLH-RSG-G02-001-01', 'LLH-RSG-G02-001-02',
-              'KGD-RSG-G02-001-01', 'KGD-RSG-G02-001-02']
-    bridge_single = ['G204320707L0160', 'G204320706L0020', 'S245320707L0010']
-    sensor_count = [8, 2, 2]
-    bridge = []
-    for i in range(len(bridge_single)):
-        bridge.extend([bridge_single[i]] * sensor_count[i])
-    timecycle = [60] * len(sensor)
+    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    bridge = filtered_data['FOREIGN_KEY'].to_list()
+    sensor = filtered_data['SENSOR_CODE'].to_list()
+    timecycle = [3600*24] * len(sensor)
     point = [144] * len(sensor)
     col = 3  # 一个包中的数据个数
     # 共享变量，用于传递数值
