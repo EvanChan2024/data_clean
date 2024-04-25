@@ -6,8 +6,9 @@ import time
 import taos
 import schedule
 import logging
+import pandas as pd
 '''
-ver2.2
+ver3.1
 '''
 
 # 锁
@@ -213,18 +214,14 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
 
 
 if __name__ == "__main__":
-    sensor = ['KGD-DIS-G02-001-01', 'KGD-DIS-G02-001-02', 'KGD-DIS-G02-001-03', 'KGD-DIS-G02-002-04', 'KGD-DIS-G02-002-05', 'KGD-DIS-G02-002-06',
-              'MZQ-DIS-G02-001-01', 'MZQ-DIS-G02-001-02', 'MZQ-DIS-G02-001-03', 'MZQ-DIS-G02-001-04', 'MZQ-DIS-G02-001-05', 'MZQ-DIS-G02-001-06',
-              'XZH-DIS-G02-001-01', 'XZH-DIS-G02-001-02', 'XZH-DIS-G02-001-03', 'XZH-DIS-G02-002-04', 'XZH-DIS-G02-002-05', 'XZH-DIS-G02-002-06']
-    bridge_single = ['S245320707L0010', 'S267320722L0090', 'G204320707L0010']
-    sensor_count = [6, 6, 6]
-    bridge = []
-    for i in range(len(bridge_single)):
-        bridge.extend([bridge_single[i]] * sensor_count[i])
+    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    bridge = filtered_data['FOREIGN_KEY'].to_list()
+    sensor = filtered_data['SENSOR_CODE'].to_list()
     timecycle = [3600*24] * len(sensor)
     point = [5*3600*24] * len(sensor)
     # 共享变量，用于传递数值
-    shared_value = [50] * len(sensor)
+    shared_value = [100] * len(sensor)
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]
