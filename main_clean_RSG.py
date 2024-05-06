@@ -56,8 +56,8 @@ def job2(string, sensorcode, thread_index, cycle):
             data_array = np.array(data)
             thresholds = []
             for col_data in data_array.T:  # 对数组的转置进行迭代，以便按列访问数据
-                q25 = np.percentile(col_data, 5)
-                q75 = np.percentile(col_data, 95)
+                q25 = np.percentile(col_data, 1)
+                q75 = np.percentile(col_data, 99)
                 iqr = (q75 - q25) * 10
                 q1 = q25 - iqr
                 q2 = q75 + iqr
@@ -152,11 +152,8 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
 
     def process_data(data, value):
         try:
-            # 统计超过参考值的索引
-            exceed_indices = np.where(np.abs(data) > value)[0]
-            # 遍历超过参考值的索引
-            for idx in exceed_indices:
-                data[idx] = value * np.random.uniform(0.1, 0.2)
+            if np.abs(data) > value:
+                data = value * np.random.uniform(0.1, 0.2)
             return data
         except Exception as e:
             logger.error(f"Data filter failed: {e}, data: {data}, value: {value}")
@@ -183,7 +180,7 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
                 thread_current = check_current_thread()
                 logger.info(f"{thread_current}: Reconnection successful")
             except Exception as e:
-                logger.error(f"Reconnection failed: {e}")
+                logger.error(f"{thread_current}: Reconnection failed: {e}")
 
     def check_current_thread():
         current_thread = threading.current_thread()
@@ -231,10 +228,10 @@ if __name__ == "__main__":
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
     timecycle = [3600*24] * len(sensor)
-    point = [144] * len(sensor)
+    point = [144*10] * len(sensor)
     col = 3  # 一个包中的数据个数
     # 共享变量，用于传递数值
-    shared_value = [300] * len(sensor) * col
+    shared_value = [3000] * len(sensor) * col
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]

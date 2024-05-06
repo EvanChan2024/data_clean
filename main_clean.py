@@ -52,8 +52,8 @@ def job2(string, sensorcode, thread_index, cycle):
 
     def threshold_cal(data):
         try:
-            q75 = np.percentile(data, 95) + (np.percentile(data, 95) - np.percentile(data, 5)) * 10  # 先将data转为numpy数组
-            q25 = np.percentile(data, 5) - (np.percentile(data, 95) - np.percentile(data, 5)) * 10
+            q75 = np.percentile(data, 99) + (np.percentile(data, 99) - np.percentile(data, 1)) * 10  # 先将data转为numpy数组
+            q25 = np.percentile(data, 1) - (np.percentile(data, 99) - np.percentile(data, 5)) * 10
             threshold = max(np.abs(q75), np.abs(q25))
             return threshold
         except Exception as e:
@@ -144,7 +144,7 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
             exceed_indices = np.where(np.abs(data) > value)[0]
             # 遍历超过参考值的索引
             for idx in exceed_indices:
-                data[idx] = value * np.random.uniform(0.1, 0.5)
+                data[idx] = value * np.random.uniform(0.1, 0.2)
             return data
         except Exception as e:
             logger.error(f"Data filter failed: {e}, data: {data}, value: {value}")
@@ -171,7 +171,7 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
                 thread_current = check_current_thread()
                 logger.info(f"{thread_current}: Reconnection successful")
             except Exception as e:
-                logger.error(f"Reconnection failed: {e}")
+                logger.error(f"{thread_current}: Reconnection failed: {e}")
 
     def check_current_thread():
         current_thread = threading.current_thread()
