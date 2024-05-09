@@ -8,7 +8,7 @@ import schedule
 import logging
 import pandas as pd
 '''
-ver3.1
+ver3.2
 '''
 
 # 锁
@@ -62,6 +62,10 @@ def job2(string, sensorcode, thread_index, cycle):
                 q1 = q25 - iqr
                 q2 = q75 + iqr
                 threshold = max(np.abs(q1), np.abs(q2))
+                if not np.isnan(threshold):
+                    threshold = threshold
+                else:
+                    threshold = 3000  # 静态替代
                 thresholds.append(threshold)
             return thresholds
         except Exception as e:
@@ -96,6 +100,10 @@ def job2(string, sensorcode, thread_index, cycle):
 
 
 def job(topic1, topic1_new, mqtt_client_id1, thread_index):
+    def on_connect(client, userdata, flags, rc):
+        # 订阅主题
+        client.subscribe(topic1)
+
     # MQTT 消息到来时的回调函数
     def on_message(client, userdata, message):
         # 接收到消息时的处理逻辑
@@ -203,26 +211,26 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
                 thread_exceptions[thread.name] = thread.exception
         return thread_exceptions
 
-    broker_address = "221.226.48.78"
-    port = 1885
-    mqtt_username = 'jsti_jkjc'
-    mqtt_password = 'Bridge321'
     # 创建 MQTT 客户端实例
     client = mqtt.Client(client_id=mqtt_client_id1, clean_session=True)  # 一个线程一个client_id即可
     client.username_pw_set(username=mqtt_username, password=mqtt_password)
-    # 设置消息到来时的回调函数
+    # 绑定连接事件处理函数
+    client.on_connect = on_connect
+    # 绑定接收消息事件处理函数
     client.on_message = on_message
-    # 设置断开连接时的回调函数
+    # 绑定断开连接事件处理函数
     client.on_disconnect = on_disconnect
     # 连接 MQTT 服务器
     client.connect(broker_address, port)
-    # 订阅主题
-    client.subscribe(topic1)
     # 循环监听消息
     client.loop_forever()
 
 
 if __name__ == "__main__":
+    broker_address = "221.226.48.78"
+    port = 1885
+    mqtt_username = 'jsti_jkjc'
+    mqtt_password = 'Bridge321'
     df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
@@ -236,7 +244,7 @@ if __name__ == "__main__":
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]
         topic_new = "cleandata/" + bridge[i] + "/" + sensor[i]
-        mqtt_client_id = "test_" + bridge[i] + "_" + sensor[i]
+        mqtt_client_id = "clean3_" + bridge[i] + "_" + sensor[i]
         string = 'select val1,val2,val3 from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
         # 创建线程
         thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
