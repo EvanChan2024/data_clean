@@ -8,7 +8,7 @@ import schedule
 import logging
 import pandas as pd
 '''
-ver3.2
+ver3.3
 '''
 
 # 锁
@@ -19,7 +19,7 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 创建一个文件处理器来将日志写入到文件
-file_handler = logging.FileHandler('app.log')
+file_handler = logging.FileHandler('app_nd.log')
 file_handler.setLevel(logging.INFO)
 
 # 定义日志消息的格式
@@ -33,7 +33,7 @@ logger.addHandler(file_handler)
 def job2(string, sensorcode, thread_index, cycle):
     def read_data(statement):
         try:
-            conn: taos.TaosConnection = taos.connect(host="dbmaster",
+            conn: taos.TaosConnection = taos.connect(host="jkjc1",
                                                      user="root",
                                                      password="taosdata",
                                                      database="db_jkjc",
@@ -93,7 +93,16 @@ def job2(string, sensorcode, thread_index, cycle):
         logger.error(f"Schedule task failed: {e}")
 
 
-def job(topic1, topic1_new, mqtt_client_id1, thread_index):
+def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index):
+    source_broker_address = "221.226.48.78"
+    source_port = 1885
+    source_mqtt_username = 'jsti_jkjc'
+    source_mqtt_password = 'Bridge321'
+    destination_broker_address = "10.30.30.249"
+    destination_port = 1883
+    destination_mqtt_username = 'jsti'
+    destination_mqtt_password = 'Bridge321'
+
     def on_connect(client, userdata, flags, rc):
         # 订阅主题
         client.subscribe(topic1)
@@ -140,14 +149,14 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
                                        *processed_data)
             thread_current = check_current_thread()
             logger.info(f"{thread_current}: Publishing data ready {processed_data}")
-            mqtt_publish(client, topic1_new, cleaned_data)
+            mqtt_publish(destination_client, topic1, cleaned_data)
             # 检查活跃线程和异常中断的原因
             thread_exceptions = check_thread_exceptions()
             if thread_exceptions:
                 for thread_name, exception in thread_exceptions.items():
                     logger.error(f"Thread Exceptions: {thread_name}: {exception}")
         except Exception as e:
-            logger.error(f"Data packing failed: {e}, Topic: {topic1_new}, Data: {data}")
+            logger.error(f"Data packing failed: {e}, Topic: {topic1}, Data: {data}")
 
     def process_data(data, value):
         try:
@@ -155,7 +164,8 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
             exceed_indices = np.where(np.abs(data) > value)[0]
             # 遍历超过参考值的索引
             for idx in exceed_indices:
-                data[idx] = value * np.random.uniform(0.1, 0.2)
+                # data[idx] = value * np.random.uniform(0.1, 0.2)
+                data[idx] = np.nan
             return data
         except Exception as e:
             logger.error(f"Data filter failed: {e}, data: {data}, value: {value}")
@@ -205,43 +215,53 @@ def job(topic1, topic1_new, mqtt_client_id1, thread_index):
                 thread_exceptions[thread.name] = thread.exception
         return thread_exceptions
 
-    # 创建 MQTT 客户端实例
-    client = mqtt.Client(client_id=mqtt_client_id1, clean_session=True)  # 一个线程一个client_id即可
-    client.username_pw_set(username=mqtt_username, password=mqtt_password)
+    # 初始化客户端
+    source_client = mqtt.Client(client_id=mqtt_client_id_source, clean_session=True)  # 一个线程一个client_id即可
+    destination_client = mqtt.Client(client_id=mqtt_client_id_destination, clean_session=True)  # 一个线程一个client_id即可
+    # 设置连接参数
+    source_client.username_pw_set(username=source_mqtt_username, password=source_mqtt_password)
+    destination_client.username_pw_set(username=destination_mqtt_username, password=destination_mqtt_password)
+
     # 绑定连接事件处理函数
-    client.on_connect = on_connect
+    source_client.on_connect = on_connect
+    destination_client.on_connect = on_connect
+
     # 绑定接收消息事件处理函数
-    client.on_message = on_message
+    source_client.on_message = on_message
+
     # 绑定断开连接事件处理函数
-    client.on_disconnect = on_disconnect
+    source_client.on_disconnect = on_disconnect
+    destination_client.on_disconnect = on_disconnect
+
     # 连接 MQTT 服务器
-    client.connect(broker_address, port)
+    destination_client.connect(destination_broker_address, destination_port)  # 先连接destination
+    source_client.connect(source_broker_address, source_port)
+
     # 循环监听消息
-    client.loop_forever()
+    source_client.loop_start()  # 如果
+
+    
+    destination_client.loop_forever()
 
 
 if __name__ == "__main__":
-    broker_address = "221.226.48.78"
-    port = 1885
-    mqtt_username = 'jsti_jkjc'
-    mqtt_password = 'Bridge321'
-    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
-    timecycle = [3600*24] * len(sensor)
+    timecycle = [3600] * len(sensor)
     point = [5*3600*24] * len(sensor)
     # 共享变量，用于传递数值
     shared_value = [100] * len(sensor)
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]
-        topic_new = "cleandata/" + bridge[i] + "/" + sensor[i]
-        mqtt_client_id = "clean3_" + bridge[i] + "_" + sensor[i]
-        string = 'select val from ' + '`' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
+        mqtt_client_id = "clean_" + bridge[i] + "_" + sensor[i]
+        mqtt_client_id2 = "clean2_" + bridge[i] + "_" + sensor[i]
+        string = 'select val from ' + '`' + bridge[i] + '-' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
         # 创建线程
         thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
-        thread1 = threading.Thread(target=job, args=(topic, topic_new, mqtt_client_id, i))
+        thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
         threads.append(thread2)  # 将线程对象添加到列表中
         threads.append(thread1)  # 将线程对象添加到列表中
         thread2.start()  # 启动线程，注意thread1与thread2的顺序
