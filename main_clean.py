@@ -8,7 +8,7 @@ import schedule
 import logging
 import pandas as pd
 '''
-ver3.3
+ver3.4
 '''
 
 # 锁
@@ -33,6 +33,7 @@ logger.addHandler(file_handler)
 def job2(string, sensorcode, thread_index, cycle):
     def read_data(statement):
         try:
+            result_list = []
             conn: taos.TaosConnection = taos.connect(host="jkjc1",
                                                      user="root",
                                                      password="taosdata",
@@ -47,21 +48,32 @@ def job2(string, sensorcode, thread_index, cycle):
             logger.info(f"{thread_id}: Threshold ready {thre}")
             conn.close()
             return thre
+        except taos.Error as e:
+            if "Table does not exist" in str(e):  # Adjust the condition to match the specific error message or code
+                logger.warning(f"Table not found, returning empty result list. Query: {statement}")
+                result_list = []
+                thre_2 = threshold_cal(result_list)
+            else:
+                logger.error(f"Connecting to database failed: {e}, query: {statement}")
+                thre_2 = 100
+            return thre_2
         except Exception as e:
-            logger.error(f"Connecting to database failed: {e}, query: {statement}",)
+            logger.error(f"An error occurred: {e}, query: {statement}")
 
     def threshold_cal(data):
         try:
+            # 检查data是否为空
+            if not data:
+                # 如果为空，设置threshold为100
+                threshold = 100
+                return threshold
+
             q75 = np.percentile(data, 99) + (np.percentile(data, 99) - np.percentile(data, 1)) * 10  # 先将data转为numpy数组
             q25 = np.percentile(data, 1) - (np.percentile(data, 99) - np.percentile(data, 5)) * 10
-            threshold = max(np.abs(q75), np.abs(q25))
-            # 检查threshold是否为NaN
-            if not np.isnan(threshold):
-                threshold = threshold
-            else:
-                threshold = 100  # 静态替代
-                thread_id = check_current_thread()
-                logger.error(f"{thread_id}: Threshold calculating resulted in NaN, data: {data}")
+            # 避免计算max时出现异常
+            thresholds = [np.abs(q75), np.abs(q25)]
+            threshold = max(thresholds) if thresholds else 100
+
             return threshold
         except Exception as e:
             logger.error(f"Threshold calculating failed: {e}, data: {data}")
@@ -238,9 +250,7 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
     source_client.connect(source_broker_address, source_port)
 
     # 循环监听消息
-    source_client.loop_start()  # 如果
-
-    
+    source_client.loop_start()  # 这里是forever就错了
     destination_client.loop_forever()
 
 
@@ -249,7 +259,7 @@ if __name__ == "__main__":
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
-    timecycle = [3600] * len(sensor)
+    timecycle = [5] * len(sensor)
     point = [5*3600*24] * len(sensor)
     # 共享变量，用于传递数值
     shared_value = [100] * len(sensor)

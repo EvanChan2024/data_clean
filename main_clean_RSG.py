@@ -8,7 +8,7 @@ import schedule
 import logging
 import pandas as pd
 '''
-ver3.3
+ver3.4
 '''
 
 # 锁
@@ -47,29 +47,44 @@ def job2(string, sensorcode, thread_index, cycle):
             logger.info(f"{thread_id}: Threshold ready {thre}")
             conn.close()
             return thre
+        except taos.Error as e:
+            if "Table does not exist" in str(e):  # Adjust the condition to match the specific error message or code
+                logger.warning(f"Table not found, returning empty result list. Query: {statement}")
+                result_list = []
+                thre_2 = threshold_cal(result_list)
+            else:
+                logger.error(f"Connecting to database failed: {e}, query: {statement}")
+                thre_2 = [3000] * 3
+            return thre_2
         except Exception as e:
-            logger.error(f"Connecting to database failed: {e}, query: {statement}",)
+            logger.error(f"An error occurred: {e}, query: {statement}")
 
     def threshold_cal(data):
-        try:
-            # 将二维列表转换为 numpy 数组
-            data_array = np.array(data)
-            thresholds = []
-            for col_data in data_array.T:  # 对数组的转置进行迭代，以便按列访问数据
-                q25 = np.percentile(col_data, 1)
-                q75 = np.percentile(col_data, 99)
-                iqr = (q75 - q25) * 10
-                q1 = q25 - iqr
-                q2 = q75 + iqr
-                threshold = max(np.abs(q1), np.abs(q2))
-                if not np.isnan(threshold):
-                    threshold = threshold
-                else:
-                    threshold = 3000  # 静态替代
-                thresholds.append(threshold)
+        # 将二维列表转换为 numpy 数组
+        data_array = np.array(data)
+        if not data_array.size:
+            thresholds = [3000] * 3
             return thresholds
-        except Exception as e:
-            logger.error(f"Threshold calculating failed: {e}, data: {data}")
+        thresholds = []
+        for col_data in data_array.T:  # 对数组的转置进行迭代，以便按列访问数据
+            try:
+                if not col_data:
+                    # 如果为空，设置threshold为100
+                    threshold = 3000
+                else:
+                    q25 = np.percentile(col_data, 1)
+                    q75 = np.percentile(col_data, 99)
+                    iqr = (q75 - q25) * 10
+                    q1 = q25 - iqr
+                    q2 = q75 + iqr
+                    threshold = max(np.abs(q1), np.abs(q2))
+                    if np.isnan(threshold):
+                        threshold = 3000
+
+                thresholds.append(threshold)
+            except Exception as e:
+                logger.error(f"Threshold calculating failed: {e}, data: {data}")
+        return thresholds
 
     def check_current_thread():
         current_thread = threading.current_thread()
