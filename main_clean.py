@@ -51,32 +51,28 @@ def job2(string, sensorcode, thread_index, cycle):
         except taos.Error as e:
             if "Table does not exist" in str(e):  # Adjust the condition to match the specific error message or code
                 logger.warning(f"Table not found, returning empty result list. Query: {statement}")
-                result_list = []
-                thre_2 = threshold_cal(result_list)
+                thre_2 = 100
+                logger.info(f"Threshold ready {thre_2}")
             else:
                 logger.error(f"Connecting to database failed: {e}, query: {statement}")
                 thre_2 = 100
+                logger.info(f"Threshold ready {thre_2}")
             return thre_2
         except Exception as e:
             logger.error(f"An error occurred: {e}, query: {statement}")
 
     def threshold_cal(data):
         try:
-            # 检查data是否为空
-            if not data:
-                # 如果为空，设置threshold为100
-                threshold = 100
-                return threshold
-
             q75 = np.percentile(data, 99) + (np.percentile(data, 99) - np.percentile(data, 1)) * 10  # 先将data转为numpy数组
             q25 = np.percentile(data, 1) - (np.percentile(data, 99) - np.percentile(data, 5)) * 10
             # 避免计算max时出现异常
             thresholds = [np.abs(q75), np.abs(q25)]
             threshold = max(thresholds) if thresholds else 100
 
-            return threshold
         except Exception as e:
             logger.error(f"Threshold calculating failed: {e}, data: {data}")
+            threshold = 100
+        return threshold
 
     def check_current_thread():
         current_thread = threading.current_thread()
@@ -255,12 +251,12 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 
 if __name__ == "__main__":
-    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part_test.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
     timecycle = [5] * len(sensor)
-    point = [5*3600*24] * len(sensor)
+    point = [10*3600*24] * len(sensor)
     # 共享变量，用于传递数值
     shared_value = [100] * len(sensor)
     threads = []  # 创建一个列表来存储线程对象
@@ -271,11 +267,11 @@ if __name__ == "__main__":
         string = 'select val from ' + '`' + bridge[i] + '-' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
         # 创建线程
         thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
-        thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
+        # thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
         threads.append(thread2)  # 将线程对象添加到列表中
-        threads.append(thread1)  # 将线程对象添加到列表中
+        # threads.append(thread1)  # 将线程对象添加到列表中
         thread2.start()  # 启动线程，注意thread1与thread2的顺序
-        thread1.start()
+        # thread1.start()
 
     # 等待所有线程创建完成
     for thread2 in threads:  # 循环体放在这不会导致单个线程中的多次循环打印相同值
@@ -283,5 +279,5 @@ if __name__ == "__main__":
         while True:
             schedule.run_pending()
             time.sleep(1)
-    for thread1 in threads:
-        thread1.join()
+    # for thread1 in threads:
+    #     thread1.join()

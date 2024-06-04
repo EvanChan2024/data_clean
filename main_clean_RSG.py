@@ -50,11 +50,12 @@ def job2(string, sensorcode, thread_index, cycle):
         except taos.Error as e:
             if "Table does not exist" in str(e):  # Adjust the condition to match the specific error message or code
                 logger.warning(f"Table not found, returning empty result list. Query: {statement}")
-                result_list = []
-                thre_2 = threshold_cal(result_list)
+                thre_2 = [3000] * 3
+                logger.info(f"Threshold ready {thre_2}")
             else:
                 logger.error(f"Connecting to database failed: {e}, query: {statement}")
                 thre_2 = [3000] * 3
+                logger.info(f"Threshold ready {thre_2}")
             return thre_2
         except Exception as e:
             logger.error(f"An error occurred: {e}, query: {statement}")
@@ -62,28 +63,22 @@ def job2(string, sensorcode, thread_index, cycle):
     def threshold_cal(data):
         # 将二维列表转换为 numpy 数组
         data_array = np.array(data)
-        if not data_array.size:
-            thresholds = [3000] * 3
-            return thresholds
         thresholds = []
         for col_data in data_array.T:  # 对数组的转置进行迭代，以便按列访问数据
             try:
-                if not col_data:
-                    # 如果为空，设置threshold为100
+                q25 = np.percentile(col_data, 1)
+                q75 = np.percentile(col_data, 99)
+                iqr = (q75 - q25) * 10
+                q1 = q25 - iqr
+                q2 = q75 + iqr
+                threshold = max(np.abs(q1), np.abs(q2))
+                if np.isnan(threshold):
                     threshold = 3000
-                else:
-                    q25 = np.percentile(col_data, 1)
-                    q75 = np.percentile(col_data, 99)
-                    iqr = (q75 - q25) * 10
-                    q1 = q25 - iqr
-                    q2 = q75 + iqr
-                    threshold = max(np.abs(q1), np.abs(q2))
-                    if np.isnan(threshold):
-                        threshold = 3000
 
                 thresholds.append(threshold)
             except Exception as e:
                 logger.error(f"Threshold calculating failed: {e}, data: {data}")
+                thresholds = [3000] * 3
         return thresholds
 
     def check_current_thread():
@@ -267,12 +262,12 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 
 if __name__ == "__main__":
-    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part_test.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
-    timecycle = [3600] * len(sensor)
-    point = [144*10] * len(sensor)
+    timecycle = [5] * len(sensor)
+    point = [144*20] * len(sensor)
     col = 3  # 一个包中的数据个数
     # 共享变量，用于传递数值
     shared_value = [3000] * len(sensor) * col
@@ -284,11 +279,11 @@ if __name__ == "__main__":
         string = 'select val1,val2,val3 from ' + '`' + bridge[i] + '-' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
         # 创建线程
         thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
-        thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
+        # thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
         threads.append(thread2)  # 将线程对象添加到列表中
-        threads.append(thread1)  # 将线程对象添加到列表中
+        # threads.append(thread1)  # 将线程对象添加到列表中
         thread2.start()  # 启动线程，注意thread1与thread2的顺序
-        thread1.start()
+        # thread1.start()
 
     # 等待所有线程创建完成
     for thread2 in threads:  # 循环体放在这不会导致单个线程中的多次循环打印相同值
@@ -296,5 +291,5 @@ if __name__ == "__main__":
         while True:
             schedule.run_pending()
             time.sleep(1)
-    for thread1 in threads:
-        thread1.join()
+    # for thread1 in threads:
+    #     thread1.join()
