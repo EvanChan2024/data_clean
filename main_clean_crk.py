@@ -23,13 +23,13 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 指定日志文件的路径
-log_directory = r'D:\Project\01\03.onlineclean\log_nd'
+log_directory = r'D:\Project\01\03.onlineclean\log_crk'
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)  # 如果目录不存在，则创建
 
 log_file = os.path.join(log_directory, 'my_log.log')
 file_handler = TimedRotatingFileHandler(
-    log_file, when='H', interval=3, backupCount=56
+    log_file, when='H', interval=24, backupCount=7
 )
 file_handler.setLevel(logging.INFO)
 
@@ -263,13 +263,13 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 if __name__ == "__main__":
     df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part_test.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
-    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['结构裂缝', 'LVDT裂缝监测', '拉绳位移监测', '梁端纵向位移', '裂缝'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
     timecycle = [3600] * len(sensor)
-    point = [5*3600*24] * len(sensor)
+    point = [3600*24] * len(sensor)
     # 共享变量，用于传递数值
-    shared_value = [100] * len(sensor)
+    shared_value = [1000] * len(sensor)
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]

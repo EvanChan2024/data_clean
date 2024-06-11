@@ -6,9 +6,13 @@ import time
 import taos
 import schedule
 import logging
+from logging.handlers import TimedRotatingFileHandler
+import os
 import pandas as pd
 '''
-ver3.4
+ver3.5
+优化程序日志记录，新增日志轮转功能
+新增梁端位移、裂缝清洗
 '''
 
 # 锁
@@ -18,8 +22,15 @@ mqtt_lock = threading.Lock()
 logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
-# 创建一个文件处理器来将日志写入到文件
-file_handler = logging.FileHandler('app_rsg.log')
+# 指定日志文件的路径
+log_directory = r'D:\Project\01\03.onlineclean\log_rsg'
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)  # 如果目录不存在，则创建
+
+log_file = os.path.join(log_directory, 'my_log.log')
+file_handler = TimedRotatingFileHandler(
+    log_file, when='H', interval=24, backupCount=7
+)
 file_handler.setLevel(logging.INFO)
 
 # 定义日志消息的格式
@@ -44,7 +55,7 @@ def job2(string, sensorcode, thread_index, cycle):
             logger.info(f"{thread_id}: Connected to database, active threads: %d", len(active_threads))
             result_list = result1.fetch_all()  # 将查询结果转换为列表
             thre = threshold_cal(result_list)
-            logger.info(f"{thread_id}: Threshold ready {thre}")
+            logger.info(f"{thread_id}: Threshold ready {thre}, Query: {statement}")
             conn.close()
             return thre
         except taos.Error as e:
@@ -266,24 +277,24 @@ if __name__ == "__main__":
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
-    timecycle = [5] * len(sensor)
-    point = [144*20] * len(sensor)
+    timecycle = [3600] * len(sensor)
+    point = [144*30] * len(sensor)
     col = 3  # 一个包中的数据个数
     # 共享变量，用于传递数值
     shared_value = [3000] * len(sensor) * col
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]
-        mqtt_client_id = "clean_" + bridge[i] + "_" + sensor[i]
-        mqtt_client_id2 = "clean2_" + bridge[i] + "_" + sensor[i]
+        mqtt_client_id = "clean_1_" + bridge[i] + "_" + sensor[i]
+        mqtt_client_id2 = "clean2_1_" + bridge[i] + "_" + sensor[i]
         string = 'select val1,val2,val3 from ' + '`' + bridge[i] + '-' + sensor[i] + '`' + ' order by ts desc' + ' limit ' + str(point[i])
         # 创建线程
         thread2 = threading.Thread(target=job2, args=(string, sensor[i], i, timecycle[i]))
-        # thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
+        thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
         threads.append(thread2)  # 将线程对象添加到列表中
-        # threads.append(thread1)  # 将线程对象添加到列表中
+        threads.append(thread1)  # 将线程对象添加到列表中
         thread2.start()  # 启动线程，注意thread1与thread2的顺序
-        # thread1.start()
+        thread1.start()
 
     # 等待所有线程创建完成
     for thread2 in threads:  # 循环体放在这不会导致单个线程中的多次循环打印相同值
@@ -291,5 +302,5 @@ if __name__ == "__main__":
         while True:
             schedule.run_pending()
             time.sleep(1)
-    # for thread1 in threads:
-    #     thread1.join()
+    for thread1 in threads:
+        thread1.join()

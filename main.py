@@ -7,25 +7,23 @@ process1 = subprocess.Popen(['python', 'main_clean.py'], stdout=subprocess.PIPE,
 process2 = subprocess.Popen(['python', 'main_clean_RSG.py'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 # 启动第三个Python程序
-process3 = subprocess.Popen(['python', 'main_clean_Other.py'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+process3 = subprocess.Popen(['python', 'main_clean_crk.py'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+# 启动第三个Python程序
+process4 = subprocess.Popen(['python', 'main_clean_Other.py'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 try:
-    # 读取并打印第一个子进程的输出
-    for line in iter(process1.stdout.readline, b''):
-        print(line.decode('utf-8').strip())
-
-    # 读取并打印第二个子进程的输出
-    for line in iter(process2.stdout.readline, b''):
-        print(line.decode('utf-8').strip())
-
-    # 读取并打印第三个子进程的输出
-    for line in iter(process3.stdout.readline, b''):
-        print(line.decode('utf-8').strip())
-
-
+    # 等待键盘中断
+    process1.wait()
+    process2.wait()
+    process3.wait()
+    process4.wait()
 except KeyboardInterrupt:
     # 在捕获到键盘中断时，关闭子进程
     process1.terminate()
     process2.terminate()
+    process3.terminate()
+    process4.terminate()
+    print("所有子进程已终止。")
 
 

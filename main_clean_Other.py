@@ -2,9 +2,13 @@ import paho.mqtt.client as mqtt
 import threading
 import time
 import logging
+from logging.handlers import TimedRotatingFileHandler
+import os
 import pandas as pd
 '''
-ver3.3
+ver3.5
+优化程序日志记录，新增日志轮转功能
+新增梁端位移、裂缝清洗
 '''
 
 # 锁
@@ -14,8 +18,15 @@ mqtt_lock = threading.Lock()
 logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
-# 创建一个文件处理器来将日志写入到文件
-file_handler = logging.FileHandler('app_other.log')
+# 指定日志文件的路径
+log_directory = r'D:\Project\01\03.onlineclean\log'
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)  # 如果目录不存在，则创建
+
+log_file = os.path.join(log_directory, 'my_log.log')
+file_handler = TimedRotatingFileHandler(
+    log_file, when='H', interval=3, backupCount=56
+)
 file_handler.setLevel(logging.INFO)
 
 # 定义日志消息的格式
@@ -129,15 +140,15 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 if __name__ == "__main__":
     df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
-    filtered_data = df[~df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移', '应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    filtered_data = df[~df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移', '应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力', '结构裂缝', 'LVDT裂缝监测', '拉绳位移监测', '梁端纵向位移', '裂缝'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
 
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]
-        mqtt_client_id = "clean_" + bridge[i] + "_" + sensor[i]
-        mqtt_client_id2 = "clean2_" + bridge[i] + "_" + sensor[i]
+        mqtt_client_id = "clean_1_" + bridge[i] + "_" + sensor[i]
+        mqtt_client_id2 = "clean2_1_" + bridge[i] + "_" + sensor[i]
         # 创建线程
         thread1 = threading.Thread(target=job, args=(topic, mqtt_client_id, mqtt_client_id2, i))
         threads.append(thread1)  # 将线程对象添加到列表中
