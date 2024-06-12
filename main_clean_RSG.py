@@ -23,7 +23,7 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 指定日志文件的路径
-log_directory = r'D:\Project\01\03.onlineclean\log_rsg'
+log_directory = r'E:\sqlite\v3_series\v3.5\log_rsg'
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)  # 如果目录不存在，则创建
 
@@ -140,7 +140,7 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
         try:
             if message:
                 thread_current = check_current_thread()
-                logger.info(f"{thread_current}: Connected to MQTT broker")
+                logger.info(f"{thread_current}: Connected to MQTT broker {topic1}")
             else:
                 thread_current = check_current_thread()
                 logger.info(f"{thread_current}: Connection failed")
@@ -273,7 +273,7 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 
 if __name__ == "__main__":
-    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part_test.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    df = pd.read_excel(r'E:\sqlite\v3_series\v3.5\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
     filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力'])][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()

@@ -23,7 +23,7 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 指定日志文件的路径
-log_directory = r'E:\sqlite\v3_series\v3.5\log_crk'
+log_directory = r'E:\sqlite\v3_series\v3.5\log_nd02'
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)  # 如果目录不存在，则创建
 
@@ -78,9 +78,9 @@ def job2(string, sensorcode, thread_index, cycle):
             q25 = np.percentile(data, 1) - (np.percentile(data, 99) - np.percentile(data, 1)) * 10
             # 避免计算max时出现异常
             thresholds = [np.abs(q75), np.abs(q25)]
-            threshold = max(thresholds) if thresholds else 1000
+            threshold = max(thresholds) if thresholds else 100
             if np.isnan(threshold):
-                threshold = 1000
+                threshold = 100
 
         except Exception as e:
             logger.error(f"Threshold calculating failed: {e}, data: {data}")
@@ -265,13 +265,14 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 if __name__ == "__main__":
     df = pd.read_excel(r'E:\sqlite\v3_series\v3.5\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
-    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['结构裂缝', 'LVDT裂缝监测', '拉绳位移监测', '梁端纵向位移', '裂缝'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移']) & df['SENSOR_POSITION'].isin(['徐州', '盐城', '扬州'])
+        ][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
     timecycle = [3600] * len(sensor)
-    point = [3600*24] * len(sensor)
+    point = [5*3600*24] * len(sensor)
     # 共享变量，用于传递数值
-    shared_value = [1000] * len(sensor)
+    shared_value = [100] * len(sensor)
     threads = []  # 创建一个列表来存储线程对象
     for i in range(len(sensor)):
         topic = "data/" + bridge[i] + "/" + sensor[i]

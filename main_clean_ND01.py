@@ -23,7 +23,7 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 指定日志文件的路径
-log_directory = r'D:\Project\01\03.onlineclean\log_nd'
+log_directory = r'E:\sqlite\v3_series\v3.5\log_nd01'
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)  # 如果目录不存在，则创建
 
@@ -75,10 +75,12 @@ def job2(string, sensorcode, thread_index, cycle):
     def threshold_cal(data):
         try:
             q75 = np.percentile(data, 99) + (np.percentile(data, 99) - np.percentile(data, 1)) * 10  # 先将data转为numpy数组
-            q25 = np.percentile(data, 1) - (np.percentile(data, 99) - np.percentile(data, 5)) * 10
+            q25 = np.percentile(data, 1) - (np.percentile(data, 99) - np.percentile(data, 1)) * 10
             # 避免计算max时出现异常
             thresholds = [np.abs(q75), np.abs(q25)]
             threshold = max(thresholds) if thresholds else 100
+            if np.isnan(threshold):
+                threshold = 100
 
         except Exception as e:
             logger.error(f"Threshold calculating failed: {e}, data: {data}")
@@ -132,7 +134,7 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
         try:
             if message:
                 thread_current = check_current_thread()
-                logger.info(f"{thread_current}: Connected to MQTT broker")
+                logger.info(f"{thread_current}: Connected to MQTT broker {topic1}")
             else:
                 thread_current = check_current_thread()
                 logger.info(f"{thread_current}: Connection failed")
@@ -262,8 +264,9 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 
 if __name__ == "__main__":
-    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part_test.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
-    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    df = pd.read_excel(r'E:\sqlite\v3_series\v3.5\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    filtered_data = df[df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移']) & df['SENSOR_POSITION'].isin(['连云港', '南京', '宿迁'])
+        ][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
     timecycle = [3600] * len(sensor)

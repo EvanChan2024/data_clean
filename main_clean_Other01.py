@@ -19,7 +19,7 @@ logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
 
 # 指定日志文件的路径
-log_directory = r'D:\Project\01\03.onlineclean\log'
+log_directory = r'E:\sqlite\v3_series\v3.5\log01'
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)  # 如果目录不存在，则创建
 
@@ -57,7 +57,7 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
         try:
             if message:
                 thread_current = check_current_thread()
-                logger.info(f"{thread_current}: Connected to MQTT broker")
+                logger.info(f"{thread_current}: Connected to MQTT broker {topic1}")
             else:
                 thread_current = check_current_thread()
                 logger.info(f"{thread_current}: Connection failed")
@@ -139,8 +139,11 @@ def job(topic1, mqtt_client_id_source, mqtt_client_id_destination, thread_index)
 
 
 if __name__ == "__main__":
-    df = pd.read_excel(r'D:\gzwj\01.重点工作\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
-    filtered_data = df[~df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移', '应变/温度', '结构应变监测(振弦)', '应变温度', '结构应力', '结构裂缝', 'LVDT裂缝监测', '拉绳位移监测', '梁端纵向位移', '裂缝'])][['FOREIGN_KEY', 'SENSOR_CODE']]
+    df = pd.read_excel(r'E:\sqlite\v3_series\v3.5\sensorinfo_part.xlsx', sheet_name='BRIDGE_TEST_SELFCHECK.T_BRIDGE')
+    filtered_data = df[~df['SENSOR_SUB_TYPE_NAME'].isin(['竖向位移', '主梁竖向位移', '主梁竖向位移监测', '主梁位移', '应变/温度',
+                                                         '结构应变监测(振弦)', '应变温度', '结构应力', '结构裂缝', 'LVDT裂缝监测',
+                                                         '拉绳位移监测', '梁端纵向位移', '裂缝']) & df['SENSOR_POSITION'].isin(['连云港', '南京', '宿迁', '徐州', '盐城', '扬州'])
+        ][['FOREIGN_KEY', 'SENSOR_CODE']]
     bridge = filtered_data['FOREIGN_KEY'].to_list()
     sensor = filtered_data['SENSOR_CODE'].to_list()
 
